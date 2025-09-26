@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Summarizer - Legal Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            background-color: #f8f9fa;
+        }
+        .summary-box {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .btn-summarize {
+            background-color: #28a745;
+            border-color: #28a745;
+            padding: 12px 30px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <h2 class="text-center mb-4">📄 Document Summarizer</h2>
+
+                <!-- Upload Form -->
+                <div class="upload-area">
+                    <form id="summarizeForm" enctype="multipart/form-data">
+                        <h5>Upload Legal Document</h5>
+                        <p class="text-muted">Supports PDF and TXT files (Max: 50MB)</p>
+
+                        <input type="file" class="form-control mb-3" id="fileInput"
+                               name="file" accept=".pdf,.txt" required>
+
+                        <button type="submit" class="btn btn-summarize text-white">
+                            ✨ Summarize Document
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Loading Spinner -->
+                <div id="loading" class="text-center" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <p class="mt-2">Analyzing document...</p>
+                </div>
+
+                <!-- Results -->
+                <div id="results" style="display: none;">
+                    <div class="summary-box">
+                        <h5>📋 Document Summary</h5>
+                        <div id="summaryContent"></div>
+                        <hr>
+                        <small class="text-muted">File: <span id="fileName"></span></small>
+                    </div>
+                </div>
+
+                <!-- Error Messages -->
+                <div id="errorAlert" class="alert alert-danger" style="display: none;"></div>
+
+                <!-- Back Button -->
+                <div class="text-center mt-4">
+                    <a href="{{ url_for('chat') }}" class="btn btn-secondary">
+                        ← Back to Chat
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('summarizeForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showError('Please select a file');
+                return;
+            }
+
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('errorAlert').style.display = 'none';
+
+            // Create FormData
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Send request
+            fetch('/summarize', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+
+                if (data.success) {
+                    // Show results
+                    document.getElementById('summaryContent').innerHTML =
+                        data.summary.replace(/\n/g, '<br>');
+                    document.getElementById('fileName').textContent = data.filename;
+                    document.getElementById('results').style.display = 'block';
+                } else {
+                    showError(data.error || 'Failed to summarize document');
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').style.display = 'none';
+                showError('Network error: ' + error.message);
+            });
+        });
+
+        function showError(message) {
+            const errorAlert = document.getElementById('errorAlert');
+            errorAlert.textContent = message;
+            errorAlert.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

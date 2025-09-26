@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Training · Lawyer AI{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 980px;">
+  <h1>Training</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-stack">
+        {% for category, message in messages %}
+          <div class="flash {{category}}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% if not embedding_deps_ok %}
+    <div class="card error" style="margin: 1rem 0;">
+      <h3>Embeddings dependencies not installed</h3>
+      <p>{{ embedding_import_error }}</p>
+      <p>Install these in your environment:</p>
+      <pre>pip install sentence-transformers faiss-cpu PyPDF2 numpy</pre>
+    </div>
+  {% endif %}
+
+  <section class="grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+    <div class="card">
+      <h2>Upload files</h2>
+      <form method="post" enctype="multipart/form-data">
+        <input type="file" name="files" accept=".pdf,.txt" multiple>
+        <button type="submit">Upload</button>
+      </form>
+
+      <details style="margin-top: .75rem;">
+        <summary>Pending uploads ({{ pending_files|length }})</summary>
+        {% if pending_files %}
+          <ul>
+            {% for f in pending_files %}
+              <li><a href="{{ url_for('uploaded_file', filename=f) }}" target="_blank" rel="noreferrer">{{ f }}</a></li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted">No files in the uploads folder.</p>
+        {% endif %}
+      </details>
+
+      <details style="margin-top: .5rem;">
+        <summary>Processed files ({{ processed_files|length }})</summary>
+        {% if processed_files %}
+          <ul>
+            {% for f in processed_files %}
+              <li><a href="{{ url_for('processed_file', filename=f) }}" target="_blank" rel="noreferrer">{{ f }}</a></li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted">No archived files yet.</p>
+        {% endif %}
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Train / Update Embeddings</h2>
+
+      <form method="post">
+        <input type="hidden" name="action" value="train">
+        <button type="submit" {% if not embedding_deps_ok %}disabled{% endif %}>
+          Process new documents
+        </button>
+      </form>
+      <p class="muted" style="margin-top:.5rem;">
+        Incremental: only files in “Pending uploads” are processed and then moved to “Processed files”.
+      </p>
+
+      <hr style="margin: 1rem 0;">
+
+      <!-- Ultra-Simple Status -->
+<div class="simple-status">
+  {% if embed_meta %}
+    <div class="status-ready">
+      <span class="status-dot ready"></span>
+      <strong>Knowledge Base Active</strong>
+    </div>
+  {% else %}
+    <div class="status-empty">
+      <span class="status-dot empty"></span>
+      <strong>No Documents</strong> - Upload files to enable AI assistance
+    </div>
+  {% endif %}
+</div>
+
+
+
+    </div>
+  </section>
+</div>
+
+<style>
+  .container .card { padding: 1rem; border: 1px solid #2b2b2b33; border-radius: .75rem; background: var(--card, #1113); }
+  .muted { opacity: .8; font-size: .95rem; }
+  .flash-stack .flash { padding: .75rem 1rem; border-radius: .5rem; margin:.25rem 0; }
+  .flash.success { background: #0c7a0c22; border: 1px solid #0c7a0c66; }
+  .flash.error { background: #a11a1a22; border: 1px solid #a11a1a66; }
+  .kv { list-style:none; padding-left:0; }
+  .kv li { margin: .25rem 0; }
+</style>
+{% endblock %}

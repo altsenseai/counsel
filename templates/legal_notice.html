@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Legal Notice Generator · Lawyer AI{% endblock %}
+{% block content %}
+<div class="legal-notice-container">
+    <h2 class="text-center mb-4">⚖️ Legal Notice Generator</h2>
+
+    <div class="legal-notice-layout">
+        <!-- LEFT SIDE: FORM -->
+        <div class="form-section">
+            <h4>📝 Notice Details</h4>
+            <form id="legalNoticeForm">
+                <!-- Notice Type Selection -->
+                <div class="form-group">
+                    <label for="noticeType">Type of Legal Notice</label>
+                    <select id="noticeType" name="notice_type" required>
+                        <option value="">Select Notice Type</option>
+                        <option value="rent_default">Rent Default / Property Eviction</option>
+                        <option value="contract_breach">Contract Breach</option>
+                        <option value="employment_termination">Employment Termination</option>
+                        <option value="recovery_of_money">Money Recovery</option>
+                        <option value="defamation">Defamation</option>
+                    </select>
+                </div>
+
+                <!-- Advocate Details -->
+                <h6 class="section-title">Advocate Details</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="advocateName">Advocate Name</label>
+                        <input type="text" id="advocateName" name="advocate_name" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="advocatePhone">Phone</label>
+                        <input type="tel" id="advocatePhone" name="advocate_phone" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="advocateAddress">Office Address</label>
+                    <textarea id="advocateAddress" name="advocate_address" rows="2" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="advocateEmail">Email</label>
+                    <input type="email" id="advocateEmail" name="advocate_email" required>
+                </div>
+
+                <!-- Client Details -->
+                <h6 class="section-title">Client Details</h6>
+                <div class="form-group">
+                    <label for="clientName">Client Name</label>
+                    <input type="text" id="clientName" name="client_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="clientAddress">Client Address</label>
+                    <textarea id="clientAddress" name="client_address" rows="2" required></textarea>
+                </div>
+
+                <!-- Recipient Details -->
+                <h6 class="section-title">Recipient Details</h6>
+                <div class="form-group">
+                    <label for="recipientName">Recipient Name</label>
+                    <input type="text" id="recipientName" name="recipient_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="recipientAddress">Recipient Address</label>
+                    <textarea id="recipientAddress" name="recipient_address" rows="2" required></textarea>
+                </div>
+
+                <!-- Case Details -->
+                <h6 class="section-title">Notice Details</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="amount">Amount (₹)</label>
+                        <input type="number" id="amount" name="amount">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="noticePeriod">Notice Period (Days)</label>
+                        <input type="number" id="noticePeriod" name="notice_period" value="15" required>
+                    </div>
+                </div>
+
+                <div class="form-group" id="propertyGroup" style="display: none;">
+                    <label for="propertyDetails">Property Details</label>
+                    <textarea id="propertyDetails" name="property_details" rows="2"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="issueDetails">Issue Description</label>
+                    <textarea id="issueDetails" name="issue_details" rows="3" required
+                              placeholder="Describe the issue in detail..."></textarea>
+                </div>
+
+                <button type="submit" class="btn-submit">📄 Generate Legal Notice</button>
+            </form>
+        </div>
+
+        <!-- RIGHT SIDE: GENERATED NOTICE -->
+        <div class="results-section">
+            <h4>📄 Generated Legal Notice</h4>
+
+            <!-- Loading -->
+            <div id="loading" class="loading text-center" style="display: none;">
+                <div class="spinner"></div>
+                <p>Generating professional legal notice...</p>
+            </div>
+
+            <!-- Empty state -->
+            <div id="emptyState" class="empty-state">
+                <div class="empty-icon">⚖️</div>
+                <p>Fill the form and click "Generate Legal Notice" to see the result here.</p>
+            </div>
+
+            <!-- Generated content -->
+            <div id="results" class="notice-results" style="display: none;">
+                <div class="notice-content">
+                    <pre id="noticeContent"></pre>
+                </div>
+                <div class="result-actions">
+                    <button id="copyNotice" class="btn btn-secondary">📋 Copy</button>
+                    <button id="addToChat" class="btn btn-success">💬 Chat</button>
+                    <button id="clearNotice" class="btn btn-outline">🗑️ Clear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('legalNoticeForm');
+    const noticeType = document.getElementById('noticeType');
+    const propertyGroup = document.getElementById('propertyGroup');
+    const loading = document.getElementById('loading');
+    const emptyState = document.getElementById('emptyState');
+    const results = document.getElementById('results');
+
+    // Show/hide property details
+    noticeType.addEventListener('change', function() {
+        if (this.value === 'rent_default') {
+            propertyGroup.style.display = 'block';
+            document.getElementById('propertyDetails').required = true;
+        } else {
+            propertyGroup.style.display = 'none';
+            document.getElementById('propertyDetails').required = false;
+        }
+    });
+
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        // Show loading
+        emptyState.style.display = 'none';
+        results.style.display = 'none';
+        loading.style.display = 'block';
+
+        try {
+            const response = await fetch('/legal_notice', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            loading.style.display = 'none';
+
+            if (result.success) {
+                document.getElementById('noticeContent').textContent = result.notice;
+                results.style.display = 'block';
+            } else {
+                alert('Error: ' + (result.error || 'Failed to generate notice'));
+                emptyState.style.display = 'block';
+            }
+        } catch (error) {
+            loading.style.display = 'none';
+            emptyState.style.display = 'block';
+            alert('Network error: ' + error.message);
+        }
+    });
+
+    // Copy notice
+    document.getElementById('copyNotice').addEventListener('click', function() {
+        const content = document.getElementById('noticeContent').textContent;
+        navigator.clipboard.writeText(content).then(() => {
+            alert('Notice copied to clipboard!');
+        });
+    });
+
+    // Clear notice
+    document.getElementById('clearNotice').addEventListener('click', function() {
+        results.style.display = 'none';
+        emptyState.style.display = 'block';
+    });
+});
+</script>
+{% endblock %}

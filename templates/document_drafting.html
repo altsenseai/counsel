@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Document Drafting · COUNSEL AI{% endblock %}
+{% block content %}
+<div class="drafting-container">
+    <h2 class="text-center mb-4">📝 Document Drafting</h2>
+
+    <div class="drafting-layout">
+        <!-- LEFT SIDE: FORM -->
+        <div class="form-section">
+            <h4>📋 Document Details</h4>
+            <form id="draftingForm">
+                <!-- Document Type Selection -->
+                <div class="form-group">
+                    <label for="docType">Document Type</label>
+                    <select id="docType" name="doc_type" required>
+                        <option value="">Select Document Type</option>
+                        <option value="nda">Non-Disclosure Agreement (NDA)</option>
+                        <option value="rental_agreement">Rental Agreement</option>
+                        <option value="employment_contract">Employment Contract</option>
+                        <option value="partnership_deed">Partnership Deed</option>
+                    </select>
+                </div>
+
+                <!-- Party 1 Details -->
+                <h6 class="section-title">First Party Details</h6>
+                <div class="form-group">
+                    <label for="party1Name" id="party1Label">Party 1 Name</label>
+                    <input type="text" id="party1Name" name="party1_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="party1Address">Address</label>
+                    <textarea id="party1Address" name="party1_address" rows="2" required></textarea>
+                </div>
+
+                <!-- Party 2 Details -->
+                <h6 class="section-title">Second Party Details</h6>
+                <div class="form-group">
+                    <label for="party2Name" id="party2Label">Party 2 Name</label>
+                    <input type="text" id="party2Name" name="party2_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="party2Address">Address</label>
+                    <textarea id="party2Address" name="party2_address" rows="2" required></textarea>
+                </div>
+
+                <!-- Document Specific Fields -->
+                <h6 class="section-title">Document Specific Details</h6>
+
+                <div class="form-group">
+                    <label for="amount" id="amountLabel">Amount/Value (₹)</label>
+                    <input type="number" id="amount" name="amount">
+                </div>
+
+                <div class="form-group">
+                    <label for="duration">Duration/Period</label>
+                    <input type="text" id="duration" name="duration"
+                           placeholder="e.g., 2 years, 11 months, indefinite">
+                </div>
+
+                <div class="form-group" id="propertyGroup" style="display: none;">
+                    <label for="propertyDetails">Property Details</label>
+                    <textarea id="propertyDetails" name="property_details" rows="2"
+                              placeholder="Property address, size, specifications..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="terms">Special Terms & Conditions</label>
+                    <textarea id="terms" name="terms" rows="3"
+                              placeholder="Any specific clauses, conditions, or requirements..."></textarea>
+                </div>
+
+                <button type="submit" class="btn-submit">📝 Generate Document</button>
+            </form>
+        </div>
+
+        <!-- RIGHT SIDE: GENERATED DOCUMENT -->
+        <div class="results-section">
+            <h4>📄 Generated Document</h4>
+
+            <!-- Loading -->
+            <div id="loading" class="loading text-center" style="display: none;">
+                <div class="spinner"></div>
+                <p>Drafting professional document...</p>
+            </div>
+
+            <!-- Empty state -->
+            <div id="emptyState" class="empty-state">
+                <div class="empty-icon">📝</div>
+                <p>Fill the form and select document type to generate a professional legal document.</p>
+            </div>
+
+            <!-- Generated content -->
+            <div id="results" class="document-results" style="display: none;">
+                <div class="document-content">
+                    <pre id="documentContent"></pre>
+                </div>
+                <div class="result-actions">
+                    <button id="copyDocument" class="btn btn-secondary">📋 Copy</button>
+                    <button id="addToChat" class="btn btn-success">💬 Discuss</button>
+                    <button id="clearDocument" class="btn btn-outline">🗑️ Clear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('draftingForm');
+    const docType = document.getElementById('docType');
+    const propertyGroup = document.getElementById('propertyGroup');
+    const loading = document.getElementById('loading');
+    const emptyState = document.getElementById('emptyState');
+    const results = document.getElementById('results');
+
+    // Dynamic labels based on document type
+    const labels = {
+        'nda': {
+            party1: 'Disclosing Party Name',
+            party2: 'Receiving Party Name',
+            amount: 'Penalty Amount (₹)'
+        },
+        'rental_agreement': {
+            party1: 'Landlord Name',
+            party2: 'Tenant Name',
+            amount: 'Monthly Rent (₹)'
+        },
+        'employment_contract': {
+            party1: 'Employer/Company Name',
+            party2: 'Employee Name',
+            amount: 'Monthly Salary (₹)'
+        },
+        'partnership_deed': {
+            party1: 'Partner 1 Name',
+            party2: 'Partner 2 Name',
+            amount: 'Total Capital (₹)'
+        }
+    };
+
+    // Update labels and show/hide fields based on document type
+    docType.addEventListener('change', function() {
+        const selectedType = this.value;
+
+        if (selectedType && labels[selectedType]) {
+            document.getElementById('party1Label').textContent = labels[selectedType].party1;
+            document.getElementById('party2Label').textContent = labels[selectedType].party2;
+            document.getElementById('amountLabel').textContent = labels[selectedType].amount;
+        }
+
+        // Show property details only for rental agreement
+        if (selectedType === 'rental_agreement') {
+            propertyGroup.style.display = 'block';
+            document.getElementById('propertyDetails').required = true;
+        } else {
+            propertyGroup.style.display = 'none';
+            document.getElementById('propertyDetails').required = false;
+        }
+    });
+
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        // Show loading
+        emptyState.style.display = 'none';
+        results.style.display = 'none';
+        loading.style.display = 'block';
+
+        try {
+            const response = await fetch('/document_drafting', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            loading.style.display = 'none';
+
+            if (result.success) {
+                document.getElementById('documentContent').textContent = result.document;
+                results.style.display = 'block';
+            } else {
+                alert('Error: ' + (result.error || 'Failed to generate document'));
+                emptyState.style.display = 'block';
+            }
+        } catch (error) {
+            loading.style.display = 'none';
+            emptyState.style.display = 'block';
+            alert('Network error: ' + error.message);
+        }
+    });
+
+    // Copy document
+    document.getElementById('copyDocument').addEventListener('click', function() {
+        const content = document.getElementById('documentContent').textContent;
+        navigator.clipboard.writeText(content).then(() => {
+            alert('Document copied to clipboard!');
+        });
+    });
+
+    // Clear document
+    document.getElementById('clearDocument').addEventListener('click', function() {
+        results.style.display = 'none';
+        emptyState.style.display = 'block';
+    });
+});
+</script>
+{% endblock %}

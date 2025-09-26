@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Chat · Lawyer AI{% endblock %}
+{% block content %}
+<div id="chat-app" class="chat-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <!-- Action buttons above new chat -->
+      <button id="summarizeBtn" class="sidebar-action-btn">📄 Summarize Doc</button>
+      <a href="{{ url_for('legal_notice_generator') }}" class="sidebar-action-btn">⚖️ Legal Notice</a>
+  <a href="{{ url_for('document_drafting') }}" class="sidebar-action-btn">📝 Document Drafting</a>
+      <!-- New chat button -->
+      <button id="newChatBtn">+ New chat</button>
+    </div>
+    <div id="chatList" class="chat-list">
+      {% if not chats %}
+        <div class="empty">No conversations yet</div>
+      {% else %}
+        {% for c in chats %}
+          <button class="chat-item" data-id="{{ c.id }}">{{ c.title }}</button>
+        {% endfor %}
+      {% endif %}
+    </div>
+  </aside>
+
+  <section class="conversation">
+    <div class="toolbar">
+      <label for="modeSelect">Mode:</label>
+      <select id="modeSelect">
+        <option value="hybrid" selected>Hybrid (docs + general)</option>
+        <option value="docs">Docs only</option>
+        <option value="general">General chat</option>
+      </select>
+    </div>
+
+    <div id="messages" class="messages">
+      <div class="bubble assistant" style="white-space: pre-wrap;">
+        Welcome {{ user.name or user.username }}. Ask a legal question to begin.
+      </div>
+    </div>
+
+    <form id="composer" class="composer">
+      <textarea id="input" rows="1" placeholder="Message Lawyer AI..." autocomplete="off"></textarea>
+      <button id="sendBtn" type="submit">Send</button>
+    </form>
+  </section>
+</div>
+
+<!-- Document Summarizer Modal -->
+<div id="summarizeModal" class="summarize-modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h5>📄 Document Summarizer</h5>
+      <button id="closeModal" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="summarizeForm" enctype="multipart/form-data">
+        <div class="upload-area">
+          <input type="file" id="fileInput" name="file" accept=".pdf,.txt" required>
+          <p class="upload-text">Upload PDF or TXT file (Max: 50MB)</p>
+        </div>
+        <button type="submit" class="btn-submit">✨ Generate Summary</button>
+      </form>
+
+      <!-- Loading -->
+      <div id="summaryLoading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>Analyzing document...</p>
+      </div>
+
+      <!-- Results -->
+      <div id="summaryResult" class="summary-result" style="display: none;">
+        <h6>Summary:</h6>
+        <div id="summaryContent"></div>
+        <button id="addToChat" class="btn-add-chat">Add to Chat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const state = { currentChatId: null, sending: false, currentSummary: null };
+
+  function $(s, r=document){ return r.querySelector(s); }
+  function $all(s, r=document){ return Array.from(r.querySelectorAll(s)); }
+
+  async function api(path, options={}){
+    const res = await fetch(path, { headers: { "Content-Type":"application/json" }, ...options });
+    let data;
+    try { data = await res.json(); } catch { data = { error: await res.text() }; }
+    if(!res.ok){ throw new Error(data?.error || res.statusText || "Request failed"); }
+    return data;
+  }
+
+  function setActive(btn){
+    $all(".chat-item").forEach(b=>b.classList.remove("active"));
+    if(btn) btn.classList.add("active");
+  }
+
+  function chatListPrepend(id, title){
+    const btn = document.createElement("button");
+    btn.className = "chat-item active";
+    btn.dataset.id = id;
+    btn.textContent = title || "New chat";
+    $("#chatList").prepend(btn);
+    setActive(btn);
+    return btn;
+  }
+
+  function updateActiveChatTitle(title){
+    const active = $(".chat-item.active");
+    if(active && title) active.textContent = title;
+  }
+
+  function addMessage(role, content){
+    const d = document.createElement("div");
+    d.className = "bubble " + (role === "user" ? "user" : "assistant");
+    d.style.whiteSpace = "pre-wrap";
+    d.textContent = content;
+    const wrap = $("#messages");
+    wrap.appendChild(d);
+    wrap.scrollTop = wrap.scrollHeight;
+    return d;
+  }
+
+  function addTyping(){
+    const t = document.createElement("div");
+    t.id = "typing";
+    t.className = "bubble assistant";
+    t.style.opacity = "0.8";
+    t.textContent = "Thinking…";
+    $("#messages").appendChild(t);
+    $("#messages").scrollTop = $("#messages").scrollHeight;
+  }
+  function removeTyping(){ const t = $("#typing"); if(t) t.remove(); }
+
+  function setSending(on){
+    state.sending = on;
+    $("#sendBtn").disabled = on;
+    $("#input").disabled = on;
+    $("#modeSelect").disabled = on;
+  }
+
+  async function createChat(title){
+    const chat = await api("/api/chats", { method: "POST", body: JSON.stringify({title: title || "New chat"}) });
+    state.currentChatId = chat.id;
+    chatListPrepend(chat.id, chat.title);
+    $("#messages").innerHTML = "";
+    addMessage("assistant", "New conversation started. How can I help?");
+    return chat;
+  }
+
+  async function sendMessage(content){
+    if(!state.currentChatId) await createChat("New chat");
+    addMessage("user", content);
+
+    const mode = $("#modeSelect").value || "hybrid";
+
+    setSending(true);
+    addTyping();
+    try{
+      const res = await api(`/api/chats/${state.currentChatId}/message`, {
+        method: "POST",
+        body: JSON.stringify({ content, mode })
+      });
+      removeTyping();
+      addMessage("assistant", res.reply || "…");
+
+      if(res.chat && res.chat.title) updateActiveChatTitle(res.chat.title);
+    }catch(err){
+      removeTyping();
+      addMessage("assistant", "[Error] " + (err.message || err));
+    }finally{
+      setSending(false);
+    }
+  }
+
+  // Document Summarizer Functions
+  function showSummarizeModal() {
+    $("#summarizeModal").style.display = "flex";
+    $("#summarizeForm").reset();
+    $("#summaryLoading").style.display = "none";
+    $("#summaryResult").style.display = "none";
+  }
+
+  function hideSummarizeModal() {
+    $("#summarizeModal").style.display = "none";
+  }
+
+  async function summarizeDocument() {
+    const fileInput = $("#fileInput");
+    const file = fileInput.files[0];
+
+    if (!file) {
+      alert("Please select a file");
+      return;
+    }
+
+    $("#summaryLoading").style.display = "block";
+    $("#summaryResult").style.display = "none";
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/summarize', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      $("#summaryLoading").style.display = "none";
+
+      if (data.success) {
+        $("#summaryContent").textContent = data.summary;
+        $("#summaryResult").style.display = "block";
+        state.currentSummary = `📄 Document Summary for "${data.filename}":\n\n${data.summary}`;
+      } else {
+        alert("Error: " + (data.error || "Failed to summarize"));
+      }
+    } catch (error) {
+      $("#summaryLoading").style.display = "none";
+      alert("Network error: " + error.message);
+    }
+  }
+
+  // UI Events
+  const ta = $("#input");
+  function autosize(){ ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 200) + "px"; }
+  ta.addEventListener("input", autosize); autosize();
+  ta.addEventListener("keydown", (e)=>{
+    if(e.key === "Enter" && !e.shiftKey){
+      e.preventDefault(); $("#composer").requestSubmit();
+    }
+  });
+
+  $("#composer").addEventListener("submit", (e)=>{
+    e.preventDefault();
+    if(state.sending) return;
+    const txt = (ta.value || "").trim();
+    if(!txt) return;
+    ta.value = ""; autosize();
+    sendMessage(txt);
+  });
+
+  $("#newChatBtn").addEventListener("click", ()=> createChat("New chat"));
+
+  // Document Summarizer Events
+  $("#summarizeBtn").addEventListener("click", showSummarizeModal);
+  $("#closeModal").addEventListener("click", hideSummarizeModal);
+
+  $("#summarizeForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    summarizeDocument();
+  });
+
+  $("#addToChat").addEventListener("click", () => {
+    if (state.currentSummary) {
+      sendMessage(state.currentSummary);
+      hideSummarizeModal();
+    }
+  });
+
+  // Close modal when clicking outside
+  $("#summarizeModal").addEventListener("click", (e) => {
+    if (e.target === $("#summarizeModal")) {
+      hideSummarizeModal();
+    }
+  });
+
+  $("#chatList").addEventListener("click", async (e)=>{
+    if(e.target.classList.contains("chat-item")){
+      state.currentChatId = e.target.dataset.id;
+      setActive(e.target);
+      try{
+        const chat = await api(`/api/chats/${state.currentChatId}`);
+        const wrap = $("#messages"); wrap.innerHTML = "";
+        chat.messages.forEach(m=>addMessage(m.role, m.content));
+      }catch(err){
+        addMessage("assistant", "[Error loading chat] " + (err.message || err));
+      }
+    }
+  });
+
+  // Auto-open first chat if present
+  window.addEventListener("DOMContentLoaded", ()=>{
+    const first = $(".chat-item");
+    if(first) first.click();
+  });
+</script>
+{% endblock %}

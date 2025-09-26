@@ -1,0 +1,18 @@
+
+{% extends "base.html" %}
+{% block title %}Login · Lawyer AI{% endblock %}
+{% block content %}
+<div class="auth-container">
+    <form method="post" class="card">
+        <h1>Login</h1>
+        <label>Username
+            <input name="username" placeholder="yourname" required>
+        </label>
+        <label>Password
+            <input name="password" type="password" placeholder="••••••••" required>
+        </label>
+        <button type="submit">Sign in</button>
+        <p class="muted">New here? <a href="{{ url_for('signup') }}">Create an account</a></p>
+    </form>
+</div>
+{% endblock %}
